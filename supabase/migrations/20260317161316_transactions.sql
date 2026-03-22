@@ -1,6 +1,8 @@
 -- PO Periods
+
 CREATE TABLE public.po_periods (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
+    tenant_id uuid REFERENCES public.tenants (id) ON DELETE CASCADE,
     name text NOT NULL,
     month text, -- Format: YYYY-MM
     po_number integer DEFAULT 1 NOT NULL,
@@ -11,8 +13,10 @@ CREATE TABLE public.po_periods (
 );
 
 -- Customers
+
 CREATE TABLE public.customers (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
+    tenant_id uuid REFERENCES public.tenants (id) ON DELETE CASCADE,
     sales_id uuid NOT NULL REFERENCES public.profiles (id),
     name text NOT NULL,
     phone text,
@@ -24,6 +28,7 @@ CREATE TABLE public.customers (
 CREATE TABLE public.orders (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
     customer_id uuid REFERENCES public.customers (id) ON DELETE CASCADE,
+    tenant_id uuid REFERENCES public.tenants (id) ON DELETE CASCADE,
     sales_id uuid NOT NULL REFERENCES public.profiles (id),
     po_period_id uuid REFERENCES public.po_periods (id) ON DELETE SET NULL,
     order_number integer NOT NULL,
@@ -55,6 +60,7 @@ CREATE TABLE public.order_items (
 -- Payments
 CREATE TABLE public.payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
+    tenant_id uuid REFERENCES public.tenants (id) ON DELETE CASCADE,
     order_id uuid NOT NULL REFERENCES public.orders (id) ON DELETE CASCADE,
     amount bigint NOT NULL,
     payment_method text, -- misal: 'transfer', 'cash'

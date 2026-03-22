@@ -1,6 +1,14 @@
 -- extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
+CREATE TABLE public.tenants (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
+    name text NOT NULL,
+    subdomain text UNIQUE, -- Untuk konveksiberkah.saas.com
+    custom_domain text UNIQUE, -- Untuk erp.konveksiberkah.com
+    created_at timestamptz DEFAULT now()
+);
+
 -- roles table
 CREATE TABLE public.roles (
     code text PRIMARY KEY,
@@ -16,6 +24,7 @@ VALUES ('superadmin', 'Super Admin'),
 -- profiles table
 CREATE TABLE public.profiles (
     id uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+    tenant_id uuid REFERENCES public.tenants (id) ON DELETE CASCADE,
     full_name text,
     role text DEFAULT 'sales' REFERENCES public.roles (code),
     email text,
@@ -39,12 +48,23 @@ CREATE TABLE public.bank_accounts (
 );
 
 -- functions for security
+CREATE OR REPLACE FUNCTION public.get_my_tenant_id() RETURNS uuid AS $$
+  SELECT tenant_id FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 CREATE OR REPLACE FUNCTION public.is_admin() RETURNS boolean AS $$
-  SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'superadmin'));
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() 
+      AND role = 'admin' -- Hilangkan superadmin di sini agar DRY, biarkan ditangani is_superadmin()
+  );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.is_superadmin() RETURNS boolean AS $$
-  SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'superadmin');
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() AND role = 'superadmin'
+  );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- trigger handle new user
@@ -54,7 +74,7 @@ BEGIN
   VALUES (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', 'New Sales'),
-    coalesce(nullif(trim(new.raw_user_meta_data->>'role'), ''), 'sales'),
+    coalesce(nullif(trim(new.raw_user_meta_data->>'role'), ''), 'sales'), -- ⚠️ Ini masalahnya
     new.email
   );
   RETURN new;
